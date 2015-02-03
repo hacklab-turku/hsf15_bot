@@ -4,6 +4,7 @@
 #include <util/delay.h>
 #include <stdlib.h>
 
+
 typedef struct 
 {
 	volatile int8_t dir;
@@ -18,6 +19,8 @@ typedef struct
 }motor_t;
 
 motor_t left, right;
+
+uint16_t range=0;
 
 
 void init_motor(motor_t* const motor, volatile uint8_t* pwm, volatile uint8_t* port, uint8_t pin_a, uint8_t pin_b)
@@ -115,7 +118,18 @@ ISR(INT1_vect)
 	motor_step(&right);
 }
 
-
+ISR(TIMER1_CAPT_vect)
+{
+	if(TCCR1B&(1<<ICES1))	//interrupt came from a rising edge
+	{
+		TCNT1=0;	//clear timer
+		TCCR1B&=(0<<ICES1);	//set interrupt for falling edge
+	}
+	else
+	{
+		range=ICR1;//store sonar value
+	}
+}
 
 void move(const int16_t right_steps, const int16_t left_steps)
 {
@@ -135,9 +149,30 @@ void move(const int16_t right_steps, const int16_t left_steps)
 	} while(i); 	
 }
 
+void sonar()
+{
+	TCCR1B|=(1<<ICES1);	//set interrupt for rising edge
+
+	//keep PB1 high for a while
+	PORTB|=(1<<1);	
+	_delay_us(10);
+	PORTB&=(0<<1);
+}
+
 
 int main(void)
 {
+	//setup for sonar
+	TCCR1B|=(1<<CS11)|(1<<CS10);	//prescale
+	TIMSK1|=(1<<ICIE1);	//icp1 (PB0) triggers the counter (interrupt)
+
+	DDRB|=(1<<1);	//PB1 triggers the sonar
+	PORTB&=(0<<1);
+
+	DDRB&=(0<<0);	//PB0 inputs range data
+	PORTB&=(0<<0);
+
+	//zidit's setups :D
 	TCCR0A = 0b10100001;
 	TCCR0B = 0b00000011;	
 
