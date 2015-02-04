@@ -118,7 +118,7 @@ ISR(INT1_vect)
 	motor_step(&right);
 }
 
-ISR(TIMER1_CAPT_vect)
+ISR(TIMER1_CAPT_vect)	//sonar is talking via PB0
 {
 	if(TCCR1B&(1<<ICES1))	//interrupt came from a rising edge
 	{
@@ -149,7 +149,7 @@ void move(const int16_t right_steps, const int16_t left_steps)
 	} while(i); 	
 }
 
-void sonar()
+void sonar()	//sends a high bit via PB1 and starts to listen to PB0
 {
 	TCCR1B|=(1<<ICES1);	//set interrupt for rising edge
 
@@ -163,7 +163,7 @@ void sonar()
 int main(void)
 {
 	//setup for sonar
-	TCCR1B|=(1<<CS11)|(1<<CS10);	//prescale
+	TCCR1B|=(1<<CS11);	// prescale clk/8 overflows in 4ms if clock is divided by 8 
 	TIMSK1|=(1<<ICIE1);	//icp1 (PB0) triggers the counter (interrupt)
 
 	DDRB|=(1<<1);	//PB1 triggers the sonar
@@ -196,6 +196,7 @@ int main(void)
 	move(-40, 0);
 	_delay_ms(500);
 	move(-80, -80);
+	sonar();
 	while(1){
 
 	}
