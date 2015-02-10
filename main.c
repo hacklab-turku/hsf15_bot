@@ -20,7 +20,8 @@ typedef struct
 
 motor_t left, right;
 
-volatile uint16_t range=0;
+int32_t left_lead;
+volatile float range=0;
 
 
 void init_motor(motor_t* const motor, volatile uint8_t* pwm, volatile uint8_t* port, uint8_t pin_a, uint8_t pin_b)
@@ -129,24 +130,42 @@ uint8_t motor_move(motor_t* const motor)
 
 }
 
+void sonar()	//sends a high bit via PB1 and starts to listen to PB0
+{
+	TCCR1B|=(1<<ICES1);	//set interrupt for rising edge
+
+	//keep PB1 high for a while
+	PORTB|=(1<<1);	
+	_delay_us(100);
+	PORTB&=~(1<<1);
+}
+
 void move_sonar(uint16_t len)
 {
-	sonar();
-	_delay_ms(100);
-	if(range  > 100)
-		motor_set_speed(&left, 25000);
-	else
-		motor_set_speed(&left, 0);
-	
-	/*if(abs(distance) < 3){
-		motor_set_speed(motor,0);
-		_delay_ms(10);
-		return 0; // close enought
+	 
+
+	while (1){
+
+		sonar();
+		_delay_ms(60);
+		float dist = range - len;
+		if(dist <= 0)
+		{
+			motor_set_speed(&left, 0);
+			motor_set_speed(&right, 0);
+			return;
+		}
+		else if(dist < 50)
+		{
+			motor_set_speed(&left, 16000);
+			motor_set_speed(&right, 16000);
+		}			
+		else
+		{
+			motor_set_speed(&left, 30000);	//32000
+			motor_set_speed(&right, 30700); //32700
+		}
 	}
-
-	if(abs(distance) < 20)
-		speed = 13000*/
-
 }
 
 ISR(INT0_vect)
@@ -168,7 +187,7 @@ ISR(TIMER1_CAPT_vect)	//sonar is talking via PB0
 	}
 	else
 	{
-		range=ICR1;//store sonar value
+		range=(float)ICR1* (8.0/100.0);//store sonar value
 	}
 }
 
@@ -192,18 +211,71 @@ void move(const int16_t left_mm, const int16_t right_mm)
 	} while(i); 	
 }
 
-void sonar()	//sends a high bit via PB1 and starts to listen to PB0
-{
-	TCCR1B|=(1<<ICES1);	//set interrupt for rising edge
 
-	//keep PB1 high for a while
-	PORTB|=(1<<1);	
-	_delay_us(100);
-	PORTB&=~(1<<1);
+
+void fix(int16_t left_lead)
+{
+	static int16_t error;
+	error += left_lead;
+
+
+	while(abs(left.position - error - right.position) > 1)
+	{
+		if(left.position - error > right.position)
+		{
+			motor_set_speed(&left, -24000);
+		}
+		else
+		{
+			motor_set_speed(&right, -24000);
+		}			
+	}
+	
+	motor_set_speed(&left, 0);
+	motor_set_speed(&right, 0);
+	
 }
 
 
+void move_turn_right()
+{
+ 	move_sonar(150);
+	_delay_ms(1000);
+	//fix(0);
+	//_delay_ms(1000);
+	move(210, 0);
+	_delay_ms(1000);
+	fix(43);
+	_delay_ms(1000);
+}
 
+void move_turn_left()
+{
+ 	move_sonar(150);
+	_delay_ms(1000);
+	//fix(0);
+	//_delay_ms(1000);
+	move(0, 210);
+	_delay_ms(1000);
+	fix(-43);
+	_delay_ms(1000);
+}
+
+
+void lab()
+{
+	move_turn_right();
+	move_turn_right();
+	move_turn_right();
+
+	move_turn_left();
+	move_turn_left();
+
+	move_turn_right();
+	move_turn_right();
+	move_turn_right();
+
+}
 
 int main(void)
 {
@@ -215,7 +287,7 @@ int main(void)
 	PORTB&=~(1<<1);
 
 	DDRB&=~(1<<0);	//PB0 inputs range data
-	PORTB&=~(0<<0);
+	PORTB&=~(1<<0);
 
 	//zidit's setups :D
 	TCCR0A = 0b10100001;
@@ -234,12 +306,19 @@ int main(void)
 	sei();
 
 
-
-	/*move(1000, 1000);
-	move(190, 0);
-	move(400, 400);
-	move(190, 0);
-	move(200, 200);*/
+ /*	move_sonar(150);
+	//move(1000, 1000);
+	_delay_ms(100);
+	move(210, 0);
+	_delay_ms(100);
+	move_sonar(150);
+	_delay_ms(100);
+	//move(400, 400);
+	move(210, 0);
+	_delay_ms(100);
+	move_sonar(150);
+	_delay_ms(100);
+	//move(200, 200);
 	//move(300, 300);
 	//move(300, 300);
 	//_delay_ms(500);
@@ -247,10 +326,12 @@ int main(void)
 	//_delay_ms(500);
 	//move(-40, 0);
 	//_delay_ms(500);
-	//move(-80, -80);
+	//move(-80, -80);*/
 
+	_delay_ms(1000);
+	lab();
 	while(1){
-		move_sonar(0);
+		
 		
 	}
 
