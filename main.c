@@ -20,7 +20,7 @@ typedef struct
 
 motor_t left, right;
 
-uint16_t range=0;
+volatile uint16_t range=0;
 
 
 void init_motor(motor_t* const motor, volatile uint8_t* pwm, volatile uint8_t* port, uint8_t pin_a, uint8_t pin_b)
@@ -78,14 +78,37 @@ void motor_step(motor_t* const motor)
 
 uint8_t motor_move(motor_t* const motor)
 {
-
 	int32_t distance = motor->destination - motor->position;
+	int16_t speed;
+	
+	if(abs(distance) < 3){
+		motor_set_speed(motor,0);
+		_delay_ms(10);
+		return 0; // close enought
+	}
+
+	if(abs(distance) < 20)
+		speed = 16000;
+	else speed = 32700;
+	
+	if(distance < 0)
+		motor_set_speed(motor,-speed);
+	else 
+		motor_set_speed(motor,speed);
+
+	return 1;
+
+	/*int32_t distance = motor->destination - motor->position;
 	
 	if(abs(distance) < 2)
 		return 0; // close enought
-
-	if(abs(distance) < 10) //ramp down
+	else if(abs(distance) < 5) //ramp down
 		motor->target_speed = 0;
+	else if(abs(distance) < 10) //ramp down
+		motor->target_speed = 10000;
+	else if(abs(distance) < 20) //ramp down
+		motor->target_speed = 20000;
+
 	else				// ramp up
 	{
 		if(distance < 0)
@@ -93,8 +116,6 @@ uint8_t motor_move(motor_t* const motor)
 		else 
 			motor->target_speed = 32700;
 	}
-
-	
 
 	int16_t inc = 16; //must be <64
 
@@ -104,7 +125,27 @@ uint8_t motor_move(motor_t* const motor)
 		motor->current_speed -= inc;
 	
 	motor_set_speed(motor, motor->current_speed);
-	return 1;
+	return 1;*/
+
+}
+
+void move_sonar(uint16_t len)
+{
+	sonar();
+	_delay_ms(100);
+	if(range  > 100)
+		motor_set_speed(&left, 25000);
+	else
+		motor_set_speed(&left, 0);
+	
+	/*if(abs(distance) < 3){
+		motor_set_speed(motor,0);
+		_delay_ms(10);
+		return 0; // close enought
+	}
+
+	if(abs(distance) < 20)
+		speed = 13000*/
 
 }
 
@@ -123,7 +164,7 @@ ISR(TIMER1_CAPT_vect)
 	if(TCCR1B&(1<<ICES1))	//interrupt came from a rising edge
 	{
 		TCNT1=0;	//clear timer
-		TCCR1B&=(0<<ICES1);	//set interrupt for falling edge
+		TCCR1B&=~(1<<ICES1);	//set interrupt for falling edge
 	}
 	else
 	{
@@ -131,9 +172,11 @@ ISR(TIMER1_CAPT_vect)
 	}
 }
 
-void move(const int16_t right_steps, const int16_t left_steps)
+void move(const int16_t left_mm, const int16_t right_mm)
 {
 
+	float right_steps = right_mm / 5.340;
+	float left_steps = left_mm / 5.340;
 
 	motor_set_destination(&left, left.position + left_steps);
 	motor_set_destination(&right, right.position + right_steps);
@@ -144,7 +187,7 @@ void move(const int16_t right_steps, const int16_t left_steps)
 	{
 		i = motor_move(&left);
 		i += motor_move(&right);
-		//_delay_us(10);
+		//_delay_us(100);
 
 	} while(i); 	
 }
@@ -155,9 +198,11 @@ void sonar()
 
 	//keep PB1 high for a while
 	PORTB|=(1<<1);	
-	_delay_us(10);
-	PORTB&=(0<<1);
+	_delay_us(100);
+	PORTB&=~(1<<1);
 }
+
+
 
 
 int main(void)
@@ -167,10 +212,10 @@ int main(void)
 	TIMSK1|=(1<<ICIE1);	//icp1 (PB0) triggers the counter (interrupt)
 
 	DDRB|=(1<<1);	//PB1 triggers the sonar
-	PORTB&=(0<<1);
+	PORTB&=~(1<<1);
 
-	DDRB&=(0<<0);	//PB0 inputs range data
-	PORTB&=(0<<0);
+	DDRB&=~(1<<0);	//PB0 inputs range data
+	PORTB&=~(0<<0);
 
 	//zidit's setups :D
 	TCCR0A = 0b10100001;
@@ -189,15 +234,22 @@ int main(void)
 	sei();
 
 
-	move(40, 40);
-	_delay_ms(500);
-	move(0, 40);
-	_delay_ms(500);
-	move(-40, 0);
-	_delay_ms(500);
-	move(-80, -80);
+	/*move(1000, 1000);
+	move(190, 0);
+	move(400, 400);
+	move(190, 0);
+	move(200, 200);*/
+	//move(300, 300);
+	//move(300, 300);
+	//_delay_ms(500);
+	//move(0, 40);
+	//_delay_ms(500);
+	//move(-40, 0);
+	//_delay_ms(500);
+	//move(-80, -80);
 	while(1){
-
+		move_sonar(0);
+		
 	}
 
 }
