@@ -3,6 +3,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 
 typedef struct 
@@ -22,6 +23,13 @@ motor_t left, right;
 
 int32_t left_lead;
 volatile float range=0;
+
+void put_char( const unsigned char data){
+ 
+ while(!(UCSR0A & (1<<UDRE0)));
+ UDR0 = data;
+ 
+}
 
 
 void init_motor(motor_t* const motor, volatile uint8_t* pwm, volatile uint8_t* port, uint8_t pin_a, uint8_t pin_b)
@@ -171,11 +179,13 @@ void move_sonar(uint16_t len)
 ISR(INT0_vect)
 {
 	motor_step(&left);
+	//put_char('L');
 }
 
 ISR(INT1_vect)
 {
 	motor_step(&right);
+	//put_char('R');
 }
 
 ISR(TIMER1_CAPT_vect)	//sonar is talking via PB0
@@ -218,16 +228,19 @@ void fix(int16_t left_lead)
 	static int16_t error;
 	error += left_lead;
 
+	printf("Fix E:  ");
+	printf("%i", error);
+	printf("\n");
 
 	while(abs(left.position - error - right.position) > 1)
 	{
 		if(left.position - error > right.position)
 		{
-			motor_set_speed(&left, -24000);
+			motor_set_speed(&right, 24000);
 		}
 		else
 		{
-			motor_set_speed(&right, -24000);
+			motor_set_speed(&left, 24000);
 		}			
 	}
 	
@@ -239,25 +252,39 @@ void fix(int16_t left_lead)
 
 void move_turn_right()
 {
+	printf("move turn R:  ");
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
  	move_sonar(150);
 	_delay_ms(1000);
 	//fix(0);
 	//_delay_ms(1000);
 	move(210, 0);
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
 	_delay_ms(1000);
 	fix(43);
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
 	_delay_ms(1000);
 }
 
 void move_turn_left()
 {
+	printf("move turn L:  ");
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
  	move_sonar(150);
 	_delay_ms(1000);
 	//fix(0);
 	//_delay_ms(1000);
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
 	move(0, 210);
 	_delay_ms(1000);
 	fix(-43);
+	printf("%i", right.position);
+	printf(" %i\n", left.position);
 	_delay_ms(1000);
 }
 
@@ -276,6 +303,9 @@ void lab()
 	move_turn_right();
 
 }
+
+
+FILE uart_str = FDEV_SETUP_STREAM(put_char, NULL, _FDEV_SETUP_RW);
 
 int main(void)
 {
@@ -305,6 +335,19 @@ int main(void)
 	EIMSK = 0b00000011;
 	sei();
 
+
+	#define BAUDRATE 9600        //The baudrate that we want to use
+	#define BAUD_PRESCALLER (((F_CPU / (BAUDRATE * 16UL))) - 1)    //The formula that does all the required maths
+	 
+	 UBRR0H = (uint8_t)(BAUD_PRESCALLER>>8);
+	 UBRR0L = (uint8_t)(BAUD_PRESCALLER);
+	 UCSR0B = (1<<TXEN0);
+	 UCSR0C = ((1<<UCSZ00)|(1<<UCSZ01));
+	
+	
+	stdout = &uart_str;
+
+	printf("test");
 
  /*	move_sonar(150);
 	//move(1000, 1000);
