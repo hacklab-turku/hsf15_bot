@@ -65,6 +65,16 @@ void motor_set_dir(motor_t* const motor, const int16_t dir)
 	}
 }
 
+void motor_break(motor_t* const motor)
+{
+	*(motor->pwm_hw) = 0;
+	*(motor->dir_port) |= motor->dir_pin_a;
+	*(motor->dir_port) |= motor->dir_pin_b;
+
+	for(uint8_t i = 0; i < 255; i++)
+		*(motor->pwm_hw) = i;
+
+}
 
 void motor_set_speed(motor_t* const motor, const int16_t speed)
 {
@@ -107,34 +117,6 @@ uint8_t motor_move(motor_t* const motor)
 
 	return 1;
 
-	/*int32_t distance = motor->destination - motor->position;
-	
-	if(abs(distance) < 2)
-		return 0; // close enought
-	else if(abs(distance) < 5) //ramp down
-		motor->target_speed = 0;
-	else if(abs(distance) < 10) //ramp down
-		motor->target_speed = 10000;
-	else if(abs(distance) < 20) //ramp down
-		motor->target_speed = 20000;
-
-	else				// ramp up
-	{
-		if(distance < 0)
-			motor->target_speed = -32700;
-		else 
-			motor->target_speed = 32700;
-	}
-
-	int16_t inc = 16; //must be <64
-
-	if(motor->current_speed <= motor->target_speed - inc)
-		motor->current_speed += inc;
-	else if(motor->current_speed >= motor->target_speed + inc)
-		motor->current_speed -= inc;
-	
-	motor_set_speed(motor, motor->current_speed);
-	return 1;*/
 
 }
 
@@ -155,7 +137,7 @@ void move_sonar(uint16_t len)
 	while (1){
 
 		sonar();
-		_delay_ms(60);
+		_delay_ms(100);
 		float dist = range - len;
 		if(dist <= 0)
 		{
@@ -223,47 +205,34 @@ void move(const int16_t left_mm, const int16_t right_mm)
 
 
 
-void fix(int16_t left_lead)
+void rotate(motor_t* const motor, int16_t steps)
 {
-	static int16_t error;
-	error += left_lead;
-
-	printf("Fix E:  ");
-	printf("%i", error);
-	printf("\n");
-
-	while(abs(left.position - error - right.position) > 1)
+	int32_t dest = motor->position + steps;
+	while(abs(dest - motor->position) > 1)
 	{
-		if(left.position - error > right.position)
+		while(abs(dest - motor->position) > 1)
 		{
-			motor_set_speed(&right, 24000);
+			if(dest > motor->position)
+				motor_set_speed(motor, 24000);
+			else
+				motor_set_speed(motor, -24000);
 		}
-		else
-		{
-			motor_set_speed(&left, 24000);
-		}			
-	}
-	
-	motor_set_speed(&left, 0);
-	motor_set_speed(&right, 0);
-	
-}
+		motor_set_speed(motor,0);
+		_delay_ms(100);
+	}	
 
+}
 
 void move_turn_right()
 {
 	printf("move turn R:  ");
 	printf("%i", right.position);
 	printf(" %i\n", left.position);
- 	move_sonar(150);
+ 	move_sonar(200);
 	_delay_ms(1000);
-	//fix(0);
-	//_delay_ms(1000);
-	move(210, 0);
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
-	_delay_ms(1000);
-	fix(43);
+
+
+	rotate(&left, 41);
 	printf("%i", right.position);
 	printf(" %i\n", left.position);
 	_delay_ms(1000);
@@ -274,15 +243,10 @@ void move_turn_left()
 	printf("move turn L:  ");
 	printf("%i", right.position);
 	printf(" %i\n", left.position);
- 	move_sonar(150);
+ 	move_sonar(200);
 	_delay_ms(1000);
-	//fix(0);
-	//_delay_ms(1000);
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
-	move(0, 210);
-	_delay_ms(1000);
-	fix(-43);
+
+	rotate(&right, 41);
 	printf("%i", right.position);
 	printf(" %i\n", left.position);
 	_delay_ms(1000);
@@ -303,6 +267,8 @@ void lab()
 	move_turn_right();
 
 }
+
+
 
 
 FILE uart_str = FDEV_SETUP_STREAM(put_char, NULL, _FDEV_SETUP_RW);
@@ -349,33 +315,16 @@ int main(void)
 
 	printf("test");
 
- /*	move_sonar(150);
-	//move(1000, 1000);
-	_delay_ms(100);
-	move(210, 0);
-	_delay_ms(100);
-	move_sonar(150);
-	_delay_ms(100);
-	//move(400, 400);
-	move(210, 0);
-	_delay_ms(100);
-	move_sonar(150);
-	_delay_ms(100);
-	//move(200, 200);
-	//move(300, 300);
-	//move(300, 300);
-	//_delay_ms(500);
-	//move(0, 40);
-	//_delay_ms(500);
-	//move(-40, 0);
-	//_delay_ms(500);
-	//move(-80, -80);*/
 
-	_delay_ms(1000);
+	_delay_ms(2000);
+	//lab();
+	//rotate_right(40);
 	lab();
 	while(1){
-		
-		
+		//rotate_right(42);
+		//_delay_ms(1000);
+		//rotate_right(-40);
+		//_delay_ms(1000);
 	}
 
 }
