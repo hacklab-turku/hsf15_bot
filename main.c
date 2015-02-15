@@ -23,6 +23,7 @@ motor_t left, right;
 
 int32_t left_lead;
 volatile float range=0;
+volatile uint8_t direction;
 
 void put_char( const unsigned char data){
  
@@ -132,7 +133,10 @@ void sonar()	//sends a high bit via PB1 and starts to listen to PB0
 
 void move_sonar(uint16_t len)
 {
-	 
+
+	motor_set_speed(&right, 22000);
+	motor_set_speed(&left, 22000);
+	_delay_ms(500);
 
 	while (1){
 
@@ -145,15 +149,20 @@ void move_sonar(uint16_t len)
 			motor_set_speed(&right, 0);
 			return;
 		}
-		else if(dist < 50)
+		else if(dist < 10)
 		{
-			motor_set_speed(&left, 16000);
-			motor_set_speed(&right, 16000);
+			motor_set_speed(&left, 14000);
+			motor_set_speed(&right, 14000);
+		}
+		else if(dist < 20)
+		{
+			motor_set_speed(&left, 20000);
+			motor_set_speed(&right, 20000);
 		}			
 		else
 		{
-			motor_set_speed(&left, 30000);	//32000
-			motor_set_speed(&right, 30700); //32700
+			motor_set_speed(&left, 32000);	//32000
+			motor_set_speed(&right, 32700); //32700
 		}
 	}
 }
@@ -203,19 +212,64 @@ void move(const int16_t left_mm, const int16_t right_mm)
 	} while(i); 	
 }
 
+int16_t get_diff(uint8_t d, uint8_t c)
+{
+	int16_t diff = d - c;
+	if(diff > 128)
+		return  diff - 256;
+	if(diff < -128)
+		return diff + 256;
+	return diff;
+}
+
+void rotate_gyro_right(int16_t steps, int16_t speed)
+{
+	uint8_t direction_dest = direction + steps;
+	
+	{
+		if(get_diff(direction_dest, direction) > 0)
+		{
+				motor_set_speed(&left, speed);
+	}
+		else
+		{
+				motor_set_speed(&left, -speed);
+			
+		}
+	}
+
+	while (abs(get_diff(direction_dest, direction)) > 1);
+	motor_set_speed(&left,0);
+
+}
+
+void rotate_gyro_right_fix(int16_t steps)
+{
+	uint8_t direction_dest = direction + steps;
+	int16_t speed = 26000;
+
+	while(abs(get_diff(direction_dest, direction)) > 3)
+	{
+		rotate_gyro_right(get_diff(direction_dest, direction), speed);
+		speed -= 1000;
+		_delay_ms(500);
+	}
+
+}
 
 
 void rotate(motor_t* const motor, int16_t steps)
 {
+	
 	int32_t dest = motor->position + steps;
 	while(abs(dest - motor->position) > 1)
 	{
 		while(abs(dest - motor->position) > 1)
 		{
 			if(dest > motor->position)
-				motor_set_speed(motor, 24000);
+				motor_set_speed(motor, 32000);
 			else
-				motor_set_speed(motor, -24000);
+				motor_set_speed(motor, -32000);
 		}
 		motor_set_speed(motor,0);
 		_delay_ms(100);
@@ -223,49 +277,71 @@ void rotate(motor_t* const motor, int16_t steps)
 
 }
 
-void move_turn_right()
+void move_turn_right(int16_t dist)
 {
-	printf("move turn R:  ");
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
- 	move_sonar(200);
-	_delay_ms(1000);
+//	printf("move turn R:  ");
+//	printf("%i", right.position);
+//	printf(" %i\n", left.position);
+ 	move_sonar(dist);
+	_delay_ms(100);
 
 
 	rotate(&left, 41);
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
-	_delay_ms(1000);
+//	printf("%i", right.position);
+//	printf(" %i\n", left.position);
+	_delay_ms(100);
 }
 
-void move_turn_left()
+void move_turn_left(int16_t dist)
 {
-	printf("move turn L:  ");
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
- 	move_sonar(200);
-	_delay_ms(1000);
+//	printf("move turn L:  ");
+//	printf("%i", right.position);
+//	printf(" %i\n", left.position);
+ 	move_sonar(dist);
+	_delay_ms(100);
 
 	rotate(&right, 41);
-	printf("%i", right.position);
-	printf(" %i\n", left.position);
+//	printf("%i", right.position);
+//	printf(" %i\n", left.position);
+	_delay_ms(100);
+}
+
+void back()
+{
+	motor_set_speed(&left, -32000);
+	motor_set_speed(&right, -32000);
 	_delay_ms(1000);
+	motor_set_speed(&left, 0);
+	motor_set_speed(&right, 0);
 }
 
 
 void lab()
 {
-	move_turn_right();
-	move_turn_right();
-	move_turn_right();
+	move_turn_right(280);
+	back();
+	move_turn_right(280);
+	back();
+	move_turn_right(280);
+	back();
 
-	move_turn_left();
-	move_turn_left();
+	move_turn_left(280);
+	back();
+	move_turn_left(200);
+	back();
 
-	move_turn_right();
-	move_turn_right();
-	move_turn_right();
+	move_turn_right(280);
+	back();
+	move_turn_right(200);
+	back();
+	move_turn_right(280);
+	back();
+}
 
+ISR(USART_RX_vect)
+{
+   direction= UDR0; 
+//	motor_set_speed(&left, 24000);
 }
 
 
@@ -307,20 +383,34 @@ int main(void)
 	 
 	 UBRR0H = (uint8_t)(BAUD_PRESCALLER>>8);
 	 UBRR0L = (uint8_t)(BAUD_PRESCALLER);
-	 UCSR0B = (1<<TXEN0);
+	 UCSR0B = (1<<RXEN0)|(1<<TXEN0);
 	 UCSR0C = ((1<<UCSZ00)|(1<<UCSZ01));
 	
+   	UCSR0B |= (1 << RXCIE0); // Enable the USART Recieve Complete interrupt (USART_RXC)
 	
-	stdout = &uart_str;
+	//stdout = &uart_str;
 
-	printf("test");
+//	printf("test");
 
 
-	_delay_ms(2000);
+	_delay_ms(1000);
 	//lab();
 	//rotate_right(40);
-	lab();
+	//	rotate_gyro_right_fix(64);
+		//_delay_ms(2000);
 	while(1){
+		lab();
+		//rotate_gyro_right_fix(64);
+		//_delay_ms(2000);
+		//lab();
+		//rotate_gyro_right_fix(64);
+		//_delay_ms(2000);
+		//rotate_gyro_right_fix(-64);
+		//_delay_ms(2000);
+		/*if(direction < 128)
+			motor_set_speed(&left, 24000);
+		else 
+			motor_set_speed(&left, 0);*/
 		//rotate_right(42);
 		//_delay_ms(1000);
 		//rotate_right(-40);
